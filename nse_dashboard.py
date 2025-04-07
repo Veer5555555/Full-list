@@ -5,12 +5,13 @@ import numpy as np
 import ta
 
 st.set_page_config(layout="wide")
-st.title("📈 Stock Trend Dashboard (Stable Version)")
+st.title("📈 Stock Trend Dashboard (Final Fixed Version)")
 
-tickers = ['INFY.NS', 'TCS.NS', 'WIPRO.NS']  # Add full list later
+tickers = ['INFY.NS', 'TCS.NS', 'WIPRO.NS']  # Use full list later
 
 RSI_OVERSOLD = 30
 RSI_OVERBOUGHT = 70
+
 data_list = []
 
 def calculate_sentiment(rsi, macd_diff):
@@ -35,12 +36,13 @@ for symbol in tickers:
             st.warning(f"Not enough data for {symbol}")
             continue
 
-        df['EMA20'] = ta.trend.ema_indicator(df['Close'], window=20)
+        df['EMA20'] = ta.trend.ema_indicator(df['Close'], window=20).ema_indicator()
         df['RSI'] = ta.momentum.RSIIndicator(df['Close'], window=14).rsi()
+
         macd = ta.trend.MACD(df['Close'])
         df['MACD'] = macd.macd()
         df['MACD_Signal'] = macd.macd_signal()
-        df['MACD_Diff'] = df['MACD'] - df['MACD_Signal']
+        df['MACD_Diff'] = macd.macd_diff()
 
         latest = df.iloc[-1]
 
@@ -66,6 +68,7 @@ for symbol in tickers:
         st.error(f"⚠️ Error with {symbol}: {e}")
 
 if data_list:
-    st.dataframe(pd.DataFrame(data_list), use_container_width=True)
+    df_final = pd.DataFrame(data_list)
+    st.dataframe(df_final, use_container_width=True)
 else:
     st.warning("🚫 No data to display. Check stock symbols or your network connection.")
