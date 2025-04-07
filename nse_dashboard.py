@@ -5,9 +5,9 @@ import numpy as np
 import ta
 
 st.set_page_config(layout="wide")
-st.title("📊 Final Stock Trend Dashboard")
+st.title("📈 Stock Trend Dashboard (Fixed & Final)")
 
-tickers = ['INFY.NS', 'TCS.NS', 'WIPRO.NS']  # Full list can be added later
+tickers = ['INFY.NS', 'TCS.NS', 'WIPRO.NS']  # Replace with your full list
 
 RSI_OVERSOLD = 30
 RSI_OVERBOUGHT = 70
@@ -33,16 +33,11 @@ for symbol in tickers:
     try:
         df = yf.download(symbol, period="3mo", interval="1d", progress=False)
         if df.empty or len(df) < 30:
-            st.warning(f"⚠️ Not enough data for {symbol}")
+            st.warning(f"Not enough data for {symbol}")
             continue
 
-        # Calculate indicators correctly
-        ema20 = ta.trend.EMAIndicator(close=df['Close'], window=20)
-        df['EMA20'] = ema20.ema_indicator()
-
-        rsi = ta.momentum.RSIIndicator(close=df['Close'], window=14)
-        df['RSI'] = rsi.rsi()
-
+        df['EMA20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator()
+        df['RSI'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi()
         macd = ta.trend.MACD(close=df['Close'])
         df['MACD'] = macd.macd()
         df['MACD_Signal'] = macd.macd_signal()
