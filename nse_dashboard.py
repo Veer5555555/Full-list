@@ -28,12 +28,10 @@ symbols = [
     'KPRMILL.NS', 'AIAENG.NS', 'POLYCAB.NS', 'INDUSTOWER.NS', 'KALYANKJIL.NS'
 ]
 
-# Constants
 RSI_PERIOD = 14
 RSI_OVERBOUGHT = 70
 RSI_OVERSOLD = 30
 
-# Indicator functions
 def compute_indicators(df):
     df['EMA_12'] = df['Close'].ewm(span=12, adjust=False).mean()
     df['EMA_26'] = df['Close'].ewm(span=26, adjust=False).mean()
@@ -41,19 +39,19 @@ def compute_indicators(df):
     df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
     df['MACD_Diff'] = df['MACD'] - df['Signal']
     
+    # Correct RSI
     delta = df['Close'].diff()
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
-    avg_gain = pd.Series(gain).rolling(window=RSI_PERIOD).mean()
-    avg_loss = pd.Series(loss).rolling(window=RSI_PERIOD).mean()
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+    avg_gain = gain.rolling(window=RSI_PERIOD, min_periods=RSI_PERIOD).mean()
+    avg_loss = loss.rolling(window=RSI_PERIOD, min_periods=RSI_PERIOD).mean()
     rs = avg_gain / avg_loss
     df['RSI'] = 100 - (100 / (1 + rs))
-    
+
     df['GANN_LEVEL'] = ((df['High'] + df['Low']) / 2).round(2)
 
     return df
 
-# Trend analysis
 def get_trend(row):
     macd = row['MACD']
     signal = row['Signal']
@@ -74,10 +72,8 @@ def get_trend(row):
     else:
         return "⚪ Neutral"
 
-# Streamlit UI
 st.title("📊 Indian Stock Trend Dashboard")
 
-# Data table
 results = []
 for symbol in symbols:
     try:
