@@ -11,38 +11,44 @@ from ta.volume import VolumeWeightedAveragePrice
 RSI_OVERBOUGHT = 70
 RSI_OVERSOLD = 30
 ADX_STRONG_TREND = 25
-max_rsi = 100  # Add a sensible default to avoid undefined variable
+max_rsi = 80  # Set upper limit for filtering overbought stocks
 
 def gann_levels(price):
-    """Calculate Gann support/resistance levels with more precise multipliers"""
     multipliers = [1.125, 1.25, 1.333, 1.5, 1.618, 1.75, 2.0, 2.25, 2.5, 3.0]
     levels_up = [round(price * m, 2) for m in multipliers]
     levels_down = [round(price / m, 2) for m in multipliers]
     return sorted(list(set(levels_up + levels_down)))
 
 def is_breakout(hist):
-    """Enhanced breakout detection with volume confirmation"""
     if len(hist) < 21:
         return False
     recent_high = hist['High'][-21:-1].max()
     volume_avg = hist['Volume'][-21:-1].mean()
-    return (hist['Close'].iloc[-1] > recent_high * 1.01 and
+    return (hist['Close'].iloc[-1] > recent_high * 1.01 and 
             hist['Volume'].iloc[-1] > volume_avg * 1.5)
 
 def get_trend_signal(close, rsi, macd_diff, adx):
-    """Determine bullish/bearish trend with multiple confirmation"""
+    sma_20 = close.rolling(20).mean()
+    if len(sma_20) < 20:
+        return "⚪ Neutral"
+
+    last_close = close.iloc[-1]
+    last_sma20 = sma_20.iloc[-1]
+
     bullish = (
-        (close.iloc[-1] > close.rolling(20).mean().iloc[-1]) and
+        (last_close > last_sma20) and
         (macd_diff > 0) and
         (rsi > 50) and
         (adx > ADX_STRONG_TREND)
     )
+
     bearish = (
-        (close.iloc[-1] < close.rolling(20).mean().iloc[-1]) and
+        (last_close < last_sma20) and
         (macd_diff < 0) and
         (rsi < 50) and
         (adx > ADX_STRONG_TREND)
     )
+
     if bullish and rsi < RSI_OVERBOUGHT:
         return "🟢 Strong Bullish"
     elif bearish and rsi > RSI_OVERSOLD:
@@ -54,31 +60,31 @@ def get_trend_signal(close, rsi, macd_diff, adx):
     else:
         return "⚪ Neutral"
 
-# Streamlit app config
 st.set_page_config(layout="wide")
 st.title("📈 Advanced NSE Stock Dashboard with Technical Signals")
 
-nse_symbols = [
-    'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS', 'ADANIPORTS.NS',
-    'TATAMOTORS.NS', 'TATASTEEL.NS', 'HAL.NS', 'IRCTC.NS', 'IOC.NS', 'COALINDIA.NS',
-    'HINDUNILVR.NS', 'PNB.NS', 'RELIANCE.NS', 'ITC.NS', 'VEDL.NS', 'JSWSTEEL.NS',
-    'NTPC.NS', 'POWERGRID.NS', 'BPCL.NS', 'ONGC.NS', 'NHPC.NS', 'ADANIGREEN.NS',
-    'GAIL.NS', 'TECHM.NS', 'HCLTECH.NS', 'CIPLA.NS', 'DIVISLAB.NS', 'SUNPHARMA.NS',
-    'BAJAJFINSV.NS', 'BAJFINANCE.NS', 'MARUTI.NS', 'EICHERMOT.NS', 'M&M.NS',
-    'HDFCBANK.NS', 'ICICIBANK.NS', 'AXISBANK.NS', 'BANKBARODA.NS', 'INDUSINDBK.NS',
-    'IDFCFIRSTB.NS', 'FEDERALBNK.NS', 'CANBK.NS', 'UNIONBANK.NS', 'NAUKRI.NS',
-    'PAYTM.NS', 'ZOMATO.NS', 'DELHIVERY.NS', 'TATAPOWER.NS', 'UPL.NS', 'LT.NS',
-    'SBICARD.NS', 'INDIGO.NS', 'BHARTIARTL.NS', 'IDEA.NS', 'BEL.NS', 'TITAN.NS',
-    'DMART.NS', 'ASIANPAINT.NS', 'DIXON.NS', 'ABB.NS', 'BHEL.NS', 'IRFC.NS',
-    'RVNL.NS', 'PFC.NS', 'RECLTD.NS', 'SJVN.NS', 'HFCL.NS', 'TATACHEM.NS',
-    'HDFCLIFE.NS', 'ICICIPRULI.NS', 'ICICIGI.NS', 'SBILIFE.NS', 'HDFCAMC.NS',
-    'CHOLAFIN.NS', 'MUTHOOTFIN.NS', 'LTIM.NS', 'PERSISTENT.NS', 'COFORGE.NS',
-    'NESTLEIND.NS', 'COLPAL.NS', 'GODREJCP.NS', 'MARICO.NS', 'BRITANNIA.NS',
-    'HAVELLS.NS', 'BLUEDART.NS', 'DRREDDY.NS', 'AUROPHARMA.NS', 'GLAND.NS',
-    'LUPIN.NS', 'BIOCON.NS', 'BOSCHLTD.NS', 'ESCORTS.NS', 'ASHOKLEY.NS',
-    'TIINDIA.NS', 'SRF.NS', 'DEEPAKNTR.NS', 'PIIND.NS', 'ASTRAL.NS', 'TATVA.NS',
-    'ADANIENT.NS', 'VBL.NS', 'SIEMENS.NS', 'KPRMILL.NS',
-    'AIAENG.NS', 'POLYCAB.NS', 'INDUSTOWER.NS', 'KALYANKJIL.NS'
+# NSE symbols list
+nse_symbols = [ 'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS', 
+    'ADANIPORTS.NS', 'TATAMOTORS.NS', 'TATASTEEL.NS', 'HAL.NS', 'IRCTC.NS',
+    'IOC.NS', 'COALINDIA.NS', 'HINDUNILVR.NS', 'PNB.NS', 'RELIANCE.NS',
+    'ITC.NS', 'VEDL.NS', 'JSWSTEEL.NS', 'NTPC.NS', 'POWERGRID.NS',
+    'BPCL.NS', 'ONGC.NS', 'NHPC.NS', 'ADANIGREEN.NS', 'GAIL.NS', 'TECHM.NS',
+    'HCLTECH.NS', 'CIPLA.NS', 'DIVISLAB.NS', 'SUNPHARMA.NS', 'BAJAJFINSV.NS',
+    'BAJFINANCE.NS', 'MARUTI.NS', 'EICHERMOT.NS', 'M&M.NS', 'HDFCBANK.NS',
+    'ICICIBANK.NS', 'AXISBANK.NS', 'BANKBARODA.NS', 'INDUSINDBK.NS', 'IDFCFIRSTB.NS',
+    'FEDERALBNK.NS', 'CANBK.NS', 'UNIONBANK.NS', 'NAUKRI.NS', 'PAYTM.NS',
+    'ZOMATO.NS', 'DELHIVERY.NS', 'TATAPOWER.NS', 'UPL.NS', 'LT.NS',
+    'SBICARD.NS', 'INDIGO.NS', 'BHARTIARTL.NS', 'IDEA.NS', 'BEL.NS',
+    'TITAN.NS', 'DMART.NS', 'ASIANPAINT.NS', 'DIXON.NS', 'ABB.NS',
+    'BHEL.NS', 'IRFC.NS', 'RVNL.NS', 'PFC.NS', 'RECLTD.NS', 'SJVN.NS',
+    'HFCL.NS', 'TATACHEM.NS', 'HDFCLIFE.NS', 'ICICIPRULI.NS', 'ICICIGI.NS',
+    'SBILIFE.NS', 'HDFCAMC.NS', 'CHOLAFIN.NS', 'MUTHOOTFIN.NS', 'LTIM.NS',
+    'PERSISTENT.NS', 'COFORGE.NS', 'NESTLEIND.NS', 'COLPAL.NS', 'GODREJCP.NS',
+    'MARICO.NS', 'BRITANNIA.NS', 'HAVELLS.NS', 'BLUEDART.NS', 'DRREDDY.NS',
+    'AUROPHARMA.NS', 'GLAND.NS', 'LUPIN.NS', 'BIOCON.NS', 'BOSCHLTD.NS',
+    'ESCORTS.NS', 'ASHOKLEY.NS', 'TIINDIA.NS', 'SRF.NS', 'DEEPAKNTR.NS',
+    'PIIND.NS', 'ASTRAL.NS', 'TATVA.NS', 'ADANIENT.NS', 'VBL.NS', 'SIEMENS.NS',
+    'KPRMILL.NS', 'AIAENG.NS', 'POLYCAB.NS', 'INDUSTOWER.NS', 'KALYANKJIL.NS'
 ]
 
 progress = st.progress(0)
@@ -109,9 +115,11 @@ for idx, symbol in enumerate(nse_symbols):
 
         adx = ADXIndicator(high=high, low=low, close=close).adx().iloc[-1]
         vwap = VolumeWeightedAveragePrice(high=high, low=low, close=close, volume=volume).vwap().iloc[-1]
+
         bb = BollingerBands(close=close)
         bb_upper = bb.bollinger_hband().iloc[-1]
         bb_lower = bb.bollinger_lband().iloc[-1]
+
         sma_20 = SMAIndicator(close=close, window=20).sma_indicator().iloc[-1]
         ema_20 = EMAIndicator(close=close, window=20).ema_indicator().iloc[-1]
 
@@ -138,8 +146,7 @@ for idx, symbol in enumerate(nse_symbols):
 
     except Exception as e:
         st.warning(f"⚠️ Error with {symbol}: {e}")
-    finally:
-        progress.progress((idx + 1) / len(nse_symbols))
+    progress.progress((idx + 1) / len(nse_symbols))
 
 if dashboard_data:
     df = pd.DataFrame(dashboard_data)
@@ -153,14 +160,14 @@ if dashboard_data:
 
     styled_df = df.style.applymap(color_trend, subset=['Trend'])
 
-    df['sort_score'] = df.apply(lambda x:
+    df['sort_score'] = df.apply(lambda x: 
         (10 if "Bullish" in x['Trend'] else -10 if "Bearish" in x['Trend'] else 0) +
         (20 if x['Breakout'] == "✅" else 0) +
         (5 if x['ADX'] > ADX_STRONG_TREND else 0), axis=1)
 
     st.dataframe(
         styled_df.sort_values(by="sort_score", ascending=False)
-            .drop(columns=['sort_score']),
+                .drop(columns=['sort_score']),
         use_container_width=True,
         height=800
     )
