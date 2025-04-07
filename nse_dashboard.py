@@ -155,7 +155,7 @@ for idx, symbol in enumerate(nse_symbols):
             "SMA 20": round(sma_20, 2),
             "EMA 20": round(ema_20, 2),
             "Breakout": "✅" if breakout else "❌",
-            "Gann Near": ", ".join(map(str, sorted(gann, key=lambda x: abs(x - price))[:4])
+            "Gann Near": ", ".join(map(str, sorted(gann, key=lambda x: abs(x - price))[:4]))
         })
 
     except Exception as e:
