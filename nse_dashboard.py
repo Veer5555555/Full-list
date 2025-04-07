@@ -1,86 +1,83 @@
 import streamlit as st
-import pandas as pd
 import yfinance as yf
+import pandas as pd
 import numpy as np
+import ta
 
-# Full list of stocks
-stock_symbols = ['INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS', 'ADANIPORTS.NS', 'TATAMOTORS.NS',
-                 'TATASTEEL.NS', 'HAL.NS', 'IRCTC.NS', 'IOC.NS', 'COALINDIA.NS', 'HINDUNILVR.NS', 'PNB.NS',
-                 'RELIANCE.NS', 'ITC.NS', 'VEDL.NS', 'JSWSTEEL.NS', 'NTPC.NS', 'POWERGRID.NS', 'BPCL.NS',
-                 'ONGC.NS', 'NHPC.NS', 'ADANIGREEN.NS', 'GAIL.NS', 'TECHM.NS', 'HCLTECH.NS', 'CIPLA.NS',
-                 'DIVISLAB.NS', 'SUNPHARMA.NS', 'BAJAJFINSV.NS', 'BAJFINANCE.NS', 'MARUTI.NS', 'EICHERMOT.NS',
-                 'M&M.NS', 'HDFCBANK.NS', 'ICICIBANK.NS', 'AXISBANK.NS', 'BANKBARODA.NS', 'INDUSINDBK.NS',
-                 'IDFCFIRSTB.NS', 'FEDERALBNK.NS', 'CANBK.NS', 'UNIONBANK.NS', 'NAUKRI.NS', 'PAYTM.NS',
-                 'ZOMATO.NS', 'DELHIVERY.NS', 'TATAPOWER.NS', 'UPL.NS', 'LT.NS', 'SBICARD.NS', 'INDIGO.NS',
-                 'BHARTIARTL.NS', 'IDEA.NS', 'BEL.NS', 'TITAN.NS', 'DMART.NS', 'ASIANPAINT.NS', 'DIXON.NS',
-                 'ABB.NS', 'BHEL.NS', 'IRFC.NS', 'RVNL.NS', 'PFC.NS', 'RECLTD.NS', 'SJVN.NS', 'HFCL.NS',
-                 'TATACHEM.NS', 'HDFCLIFE.NS', 'ICICIPRULI.NS', 'ICICIGI.NS', 'SBILIFE.NS', 'HDFCAMC.NS',
-                 'CHOLAFIN.NS', 'MUTHOOTFIN.NS', 'LTIM.NS', 'PERSISTENT.NS', 'COFORGE.NS', 'NESTLEIND.NS',
-                 'COLPAL.NS', 'GODREJCP.NS', 'MARICO.NS', 'BRITANNIA.NS', 'HAVELLS.NS', 'BLUEDART.NS',
-                 'DRREDDY.NS', 'AUROPHARMA.NS', 'GLAND.NS', 'LUPIN.NS', 'BIOCON.NS', 'BOSCHLTD.NS', 'ESCORTS.NS',
-                 'ASHOKLEY.NS', 'TIINDIA.NS', 'SRF.NS', 'DEEPAKNTR.NS', 'PIIND.NS', 'ASTRAL.NS', 'TATVA.NS',
-                 'ADANIENT.NS', 'VBL.NS', 'SIEMENS.NS', 'KPRMILL.NS', 'AIAENG.NS', 'POLYCAB.NS',
-                 'INDUSTOWER.NS', 'KALYANKJIL.NS']
-
-# Indicator calculation
-def analyze_stock(symbol):
-    try:
-        df = yf.download(symbol, period="6mo", interval="1d", progress=False)
-        if df.empty or len(df) < 50:
-            return None
-        df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
-        df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
-        df['EMA100'] = df['Close'].ewm(span=100, adjust=False).mean()
-        delta = df['Close'].diff()
-        gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
-        avg_gain = gain.rolling(14).mean()
-        avg_loss = loss.rolling(14).mean()
-        rs = avg_gain / avg_loss
-        df['RSI'] = 100 - (100 / (1 + rs))
-        df['MACD'] = df['Close'].ewm(span=12, adjust=False).mean() - df['Close'].ewm(span=26, adjust=False).mean()
-        df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-        df['MACD_Diff'] = df['MACD'] - df['Signal']
-        tr = pd.concat([
-            df['High'] - df['Low'],
-            abs(df['High'] - df['Close'].shift()),
-            abs(df['Low'] - df['Close'].shift())
-        ], axis=1).max(axis=1)
-        df['ATR'] = tr.rolling(14).mean()
-        latest = df.iloc[-1]
-        close = latest['Close']
-        bullish = close > latest['EMA20'] > latest['EMA50'] > latest['EMA100']
-        bearish = close < latest['EMA20'] < latest['EMA50'] < latest['EMA100']
-        if bullish and latest['RSI'] < 70:
-            sentiment = "🟢 Strong Bullish"
-        elif bearish and latest['RSI'] > 30:
-            sentiment = "🔴 Strong Bearish"
-        elif bullish:
-            sentiment = "🟡 Mild Bullish"
-        elif bearish:
-            sentiment = "🟠 Mild Bearish"
-        else:
-            sentiment = "⚪ Neutral"
-        return {
-            "Symbol": symbol,
-            "Price": round(close, 2),
-            "RSI": round(latest['RSI'], 2),
-            "MACD": round(latest['MACD'], 2),
-            "MACD_Diff": round(latest['MACD_Diff'], 2),
-            "Sentiment": sentiment,
-            "Target 1": round(close + latest['ATR'], 2),
-            "Target 2": round(close + 2 * latest['ATR'], 2),
-            "Target 3": round(close + 3 * latest['ATR'], 2),
-            "Stop Loss": round(close - latest['ATR'], 2)
-        }
-    except:
-        return None
-
-# Streamlit app setup
+# === SETTINGS ===
 st.set_page_config(layout="wide")
-st.title("📊 Indian Stock Dashboard with Technical Indicators")
-with st.spinner("Fetching stock data..."):
-    results = [analyze_stock(symbol) for symbol in stock_symbols]
-    results = [res for res in results if res]
-df = pd.DataFrame(results)
-st.dataframe(df, use_container_width=True)
+st.title("📈 Indian Stock Breakout Dashboard")
+
+tickers = ['INFY.NS', 'TCS.NS', 'WIPRO.NS']
+rows = []
+
+# === TECHNICAL THRESHOLDS ===
+RSI_OVERSOLD = 30
+RSI_OVERBOUGHT = 70
+
+def get_sentiment(rsi, macd_diff):
+    bullish = macd_diff > 0 and rsi > RSI_OVERSOLD
+    bearish = macd_diff < 0 and rsi < RSI_OVERBOUGHT
+
+    if bullish and rsi < RSI_OVERBOUGHT:
+        return "🟢 Strong Bullish"
+    elif bearish and rsi > RSI_OVERSOLD:
+        return "🔴 Strong Bearish"
+    elif bullish:
+        return "🟡 Mild Bullish"
+    elif bearish:
+        return "🟠 Mild Bearish"
+    else:
+        return "⚪ Neutral"
+
+def get_targets_sl(close_price):
+    return round(close_price * 1.02, 2), round(close_price * 1.04, 2), round(close_price * 1.06, 2), round(close_price * 0.98, 2)
+
+# === DATA PROCESSING ===
+for ticker in tickers:
+    try:
+        df = yf.download(ticker, period="3mo", interval="1d", progress=False)
+        if df.empty:
+            st.warning(f"⚠️ No data for {ticker}")
+            continue
+
+        df.dropna(inplace=True)
+
+        close = df['Close']
+        df['EMA20'] = ta.trend.ema_indicator(close, window=20).ema_indicator()
+        df['RSI'] = ta.momentum.RSIIndicator(close, window=14).rsi()
+        macd = ta.trend.MACD(close)
+        df['MACD'] = macd.macd()
+        df['Signal'] = macd.macd_signal()
+        df['MACD_Diff'] = df['MACD'] - df['Signal']
+
+        latest = df.iloc[-1]
+
+        sentiment = get_sentiment(latest['RSI'], latest['MACD_Diff'])
+        tgt1, tgt2, tgt3, sl = get_targets_sl(latest['Close'])
+
+        rows.append({
+            'Symbol': ticker,
+            'Close': round(latest['Close'], 2),
+            'EMA20': round(latest['EMA20'], 2),
+            'RSI': round(latest['RSI'], 2),
+            'MACD': round(latest['MACD'], 2),
+            'Signal': round(latest['Signal'], 2),
+            'MACD_Diff': round(latest['MACD_Diff'], 2),
+            'Sentiment': sentiment,
+            'Target 1': tgt1,
+            'Target 2': tgt2,
+            'Target 3': tgt3,
+            'Stop Loss': sl
+        })
+
+    except Exception as e:
+        st.error(f"⚠️ Error with {ticker}: {e}")
+
+# === DISPLAY TABLE ===
+df_final = pd.DataFrame(rows)
+
+if df_final.empty:
+    st.warning("No data to display. Please verify stock symbols or network connection.")
+else:
+    st.dataframe(df_final, use_container_width=True)
