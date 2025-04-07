@@ -106,9 +106,9 @@ for idx, symbol in enumerate(nse_symbols):
         # Technical indicators
         rsi = RSIIndicator(close=close).rsi().iloc[-1]
         
-        # Skip if RSI filter not met
-        if rsi > max_rsi:
-            continue
+# No RSI filtering now
+pass
+
             
         macd_obj = MACD(close=close)
         macd_diff = macd_obj.macd_diff().iloc[-1]
@@ -165,19 +165,23 @@ if dashboard_data:
             return 'background-color: lightcoral'
         return ''
     
-    styled_df = df.style.applymap(color_trend, subset=['Trend'])
-    
-    # Sort by trend strength and breakout potential
-    df['sort_score'] = df.apply(lambda x: 
-        (10 if "Bullish" in x['Trend'] else -10 if "Bearish" in x['Trend'] else 0) +
-        (20 if x['Breakout'] == "✅" else 0) +
-        (5 if x['ADX'] > ADX_STRONG_TREND else 0), axis=1)
-    
-    st.dataframe(
-        styled_df.sort_values(by="sort_score", ascending=False)
-                .drop(columns=['sort_score']),
-        use_container_width=True,
-        height=800
-    )
+# Sort by trend and breakout strength
+df['sort_score'] = df.apply(lambda x: 
+    (10 if "Bullish" in x['Trend'] else -10 if "Bearish" in x['Trend'] else 0) +
+    (20 if x['Breakout'] == "✅" else 0) +
+    (5 if x['ADX'] > ADX_STRONG_TREND else 0), axis=1)
+
+df_sorted = df.sort_values(by="sort_score", ascending=False).drop(columns=['sort_score'])
+
+# Apply style AFTER sorting
+styled_df = df_sorted.style.applymap(color_trend, subset=['Trend'])
+
+# Display final dashboard
+st.dataframe(
+    styled_df,
+    use_container_width=True,
+    height=800
+)
+
 else:
     st.warning("No stocks match your filters. Try adjusting your criteria.")
