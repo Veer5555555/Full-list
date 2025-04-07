@@ -5,61 +5,56 @@ import numpy as np
 import ta
 
 st.set_page_config(layout="wide")
-st.title("📊 Stock Trend Dashboard - Tested & Working ✅")
+st.title("📈 Stock Trend Dashboard (Stable Version)")
 
-tickers = ['INFY.NS', 'TCS.NS', 'WIPRO.NS']  # Full list can be added later
+tickers = ['INFY.NS', 'TCS.NS', 'WIPRO.NS']  # Add full list later
 
 RSI_OVERSOLD = 30
 RSI_OVERBOUGHT = 70
 data_list = []
 
 def calculate_sentiment(rsi, macd_diff):
-    bullish = macd_diff > 0 and rsi > RSI_OVERSOLD
-    bearish = macd_diff < 0 and rsi < RSI_OVERBOUGHT
-
-    if bullish and rsi < RSI_OVERBOUGHT:
+    if macd_diff > 0 and rsi < RSI_OVERBOUGHT:
         return "🟢 Strong Bullish"
-    elif bearish and rsi > RSI_OVERSOLD:
+    elif macd_diff < 0 and rsi > RSI_OVERSOLD:
         return "🔴 Strong Bearish"
-    elif bullish:
+    elif macd_diff > 0:
         return "🟡 Mild Bullish"
-    elif bearish:
+    elif macd_diff < 0:
         return "🟠 Mild Bearish"
     else:
         return "⚪ Neutral"
 
-def get_targets_sl(close_price):
-    return round(close_price * 1.02, 2), round(close_price * 1.04, 2), round(close_price * 1.06, 2), round(close_price * 0.98, 2)
+def get_targets_sl(close):
+    return round(close * 1.02, 2), round(close * 1.04, 2), round(close * 1.06, 2), round(close * 0.98, 2)
 
 for symbol in tickers:
     try:
-        df = yf.download(symbol, period='3mo', interval='1d', progress=False)
-
-        if df.empty:
-            st.warning(f"No data found for {symbol}")
+        df = yf.download(symbol, period="3mo", interval="1d", progress=False)
+        if df.empty or len(df) < 30:
+            st.warning(f"Not enough data for {symbol}")
             continue
 
-        df.dropna(inplace=True)
-
-        df['EMA20'] = ta.trend.ema_indicator(close=df['Close'], window=20).ema_indicator().values.flatten()
-        df['RSI'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi().values.flatten()
-        macd_obj = ta.trend.MACD(close=df['Close'])
-        df['MACD'] = macd_obj.macd().values.flatten()
-        df['MACD_Signal'] = macd_obj.macd_signal().values.flatten()
+        df['EMA20'] = ta.trend.ema_indicator(df['Close'], window=20)
+        df['RSI'] = ta.momentum.RSIIndicator(df['Close'], window=14).rsi()
+        macd = ta.trend.MACD(df['Close'])
+        df['MACD'] = macd.macd()
+        df['MACD_Signal'] = macd.macd_signal()
         df['MACD_Diff'] = df['MACD'] - df['MACD_Signal']
 
-        last = df.iloc[-1]
-        sentiment = calculate_sentiment(last['RSI'], last['MACD_Diff'])
-        tgt1, tgt2, tgt3, sl = get_targets_sl(last['Close'])
+        latest = df.iloc[-1]
+
+        sentiment = calculate_sentiment(latest['RSI'], latest['MACD_Diff'])
+        tgt1, tgt2, tgt3, sl = get_targets_sl(latest['Close'])
 
         data_list.append({
             'Symbol': symbol,
-            'Close': round(last['Close'], 2),
-            'EMA20': round(last['EMA20'], 2),
-            'RSI': round(last['RSI'], 2),
-            'MACD': round(last['MACD'], 2),
-            'Signal': round(last['MACD_Signal'], 2),
-            'MACD Diff': round(last['MACD_Diff'], 2),
+            'Close': round(latest['Close'], 2),
+            'EMA20': round(latest['EMA20'], 2),
+            'RSI': round(latest['RSI'], 2),
+            'MACD': round(latest['MACD'], 2),
+            'Signal': round(latest['MACD_Signal'], 2),
+            'MACD Diff': round(latest['MACD_Diff'], 2),
             'Sentiment': sentiment,
             'Target 1': tgt1,
             'Target 2': tgt2,
@@ -70,10 +65,7 @@ for symbol in tickers:
     except Exception as e:
         st.error(f"⚠️ Error with {symbol}: {e}")
 
-# Display
-df_display = pd.DataFrame(data_list)
-
-if df_display.empty:
-    st.warning("🚫 No data to display. Check symbols or network.")
+if data_list:
+    st.dataframe(pd.DataFrame(data_list), use_container_width=True)
 else:
-    st.dataframe(df_display, use_container_width=True)
+    st.warning("🚫 No data to display. Check stock symbols or your network connection.")
