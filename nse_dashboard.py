@@ -3,12 +3,12 @@ import pandas as pd
 import streamlit as st
 import datetime
 
-# --- Constants ---
+# --- Settings ---
 RSI_PERIOD = 14
 RSI_OVERBOUGHT = 70
 RSI_OVERSOLD = 30
 
-# --- Full stock list ---
+# --- NSE Stock Symbols ---
 stocks = [
     'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS', 'ADANIPORTS.NS', 'TATAMOTORS.NS',
     'TATASTEEL.NS', 'HAL.NS', 'IRCTC.NS', 'IOC.NS', 'COALINDIA.NS', 'HINDUNILVR.NS', 'PNB.NS',
@@ -29,13 +29,13 @@ stocks = [
     'KALYANKJIL.NS'
 ]
 
-# --- Functions ---
+# --- Helper Functions ---
 def calculate_rsi(data, period=RSI_PERIOD):
     delta = data['Close'].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(window=period).mean()
-    avg_loss = loss.rolling(window=period).mean()
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
@@ -61,17 +61,17 @@ def classify_trend(macd, signal, rsi, close, gann_up, gann_down):
         return "⚪ Neutral"
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="📊 Stock Breakout Dashboard", layout="wide")
+st.set_page_config("📊 Stock Breakout Dashboard", layout="wide")
 st.title("📈 Stock Breakout Dashboard with GANN, RSI, MACD")
 
-selected_stocks = st.multiselect("Select stocks to analyze:", stocks, default=stocks[:30])
+selected = st.multiselect("Select Stocks", options=stocks, default=stocks[:30])
 start_date = datetime.datetime.today() - datetime.timedelta(days=100)
 end_date = datetime.datetime.today()
 
-# --- Analysis Loop ---
 results = []
 
-for symbol in selected_stocks:
+# --- Data Processing ---
+for symbol in selected:
     try:
         df = yf.download(symbol, start=start_date, end=end_date, progress=False)
         if df.empty or len(df) < 30:
@@ -114,4 +114,4 @@ if results:
     df_final = pd.DataFrame(results)
     st.dataframe(df_final.sort_values("Trend", ascending=False), use_container_width=True)
 else:
-    st.info("No stock data available. Try selecting different symbols.")
+    st.info("No stock data available.")
