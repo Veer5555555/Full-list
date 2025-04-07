@@ -85,13 +85,6 @@ nse_symbols = [
     'AIAENG.NS', 'POLYCAB.NS', 'INDUSTOWER.NS','KALYANKJIL.NS'
 ]
 
-# Add filters
-col1, col2 = st.columns(2)
-with col1:
-    min_price = st.number_input("Minimum Price", min_value=0, value=100)
-with col2:
-    max_rsi = st.number_input("Maximum RSI", min_value=0, max_value=100, value=70)
-
 progress = st.progress(0)
 dashboard_data = []
 
@@ -109,10 +102,7 @@ for idx, symbol in enumerate(nse_symbols):
         volume = hist['Volume']
         price = close.iloc[-1]
         
-        # Skip if price filter not met
-        if price < min_price:
-            continue
-
+     
         # Technical indicators
         rsi = RSIIndicator(close=close).rsi().iloc[-1]
         
