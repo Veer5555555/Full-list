@@ -2,13 +2,12 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import numpy as np
-from ta.trend import MACD, EMAIndicator
+from ta.trend import EMAIndicator, MACD
 from ta.momentum import RSIIndicator
 
 st.set_page_config(layout="wide")
-st.title("📈 Indian Stock Breakout Dashboard with Targets")
+st.title("📈 Indian Stock Breakout Dashboard")
 
-# List of your 100+ stocks
 stock_list = [
     'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS', 'ADANIPORTS.NS', 'TATAMOTORS.NS',
     'TATASTEEL.NS', 'HAL.NS', 'IRCTC.NS', 'IOC.NS', 'COALINDIA.NS', 'HINDUNILVR.NS',
@@ -35,9 +34,9 @@ def fetch_data(symbol):
         df = yf.download(symbol, period='6mo', interval='1d', progress=False)
         if df.empty:
             return None
-        df['EMA20'] = EMAIndicator(df['Close']).ema_indicator()
-        df['EMA50'] = EMAIndicator(df['Close'], window=50).ema_indicator()
-        df['RSI'] = RSIIndicator(df['Close']).rsi()
+        df['EMA20'] = EMAIndicator(close=df['Close'], window=20).ema_indicator()
+        df['EMA50'] = EMAIndicator(close=df['Close'], window=50).ema_indicator()
+        df['RSI'] = RSIIndicator(close=df['Close']).rsi()
         macd = MACD(close=df['Close'])
         df['MACD'] = macd.macd()
         df['Signal'] = macd.macd_signal()
@@ -45,23 +44,22 @@ def fetch_data(symbol):
         df['GANN'] = df['Close'].rolling(window=8).mean()
         df.dropna(inplace=True)
         return df
-    except Exception as e:
-        st.warning(f"⚠️ Error with {symbol}: {e}")
+    except:
         return None
 
-def analyze_stock(df, symbol):
-    latest = df.iloc[-1]
-    price = round(latest['Close'], 2)
-    ema20 = round(latest['EMA20'], 2)
-    ema50 = round(latest['EMA50'], 2)
-    rsi = round(latest['RSI'], 2)
-    macd_val = round(latest['MACD'], 2)
-    signal = round(latest['Signal'], 2)
-    macd_diff = round(latest['MACD_Hist'], 2)
-    gann = round(latest['GANN'], 2)
+def analyze(df, symbol):
+    row = df.iloc[-1]
+    price = float(row['Close'])
+    ema20 = float(row['EMA20'])
+    ema50 = float(row['EMA50'])
+    rsi = float(row['RSI'])
+    macd = float(row['MACD'])
+    signal = float(row['Signal'])
+    macd_hist = float(row['MACD_Hist'])
+    gann = float(row['GANN'])
 
-    bullish = (price > ema20) and (macd_val > signal) and (rsi > 50)
-    bearish = (price < ema20) and (macd_val < signal) and (rsi < 50)
+    bullish = price > ema20 and macd > signal and rsi > 50
+    bearish = price < ema20 and macd < signal and rsi < 50
 
     if bullish and rsi < 70:
         sentiment = "🟢 Strong Bullish"
@@ -74,40 +72,35 @@ def analyze_stock(df, symbol):
     else:
         sentiment = "⚪ Neutral"
 
-    target1 = round(price * 1.02, 2)
-    target2 = round(price * 1.04, 2)
-    target3 = round(price * 1.06, 2)
-    stop_loss = round(price * 0.97, 2)
-
     return {
         'Symbol': symbol,
-        'Price': price,
-        'EMA20': ema20,
-        'EMA50': ema50,
-        'RSI': rsi,
-        'MACD': macd_val,
-        'Signal Line': signal,
-        'MACD Diff': macd_diff,
-        'GANN Level': gann,
+        'Price': round(price, 2),
+        'EMA20': round(ema20, 2),
+        'EMA50': round(ema50, 2),
+        'RSI': round(rsi, 2),
+        'MACD': round(macd, 2),
+        'Signal': round(signal, 2),
+        'MACD Diff': round(macd_hist, 2),
+        'GANN Level': round(gann, 2),
         'Sentiment': sentiment,
-        'Target 1': target1,
-        'Target 2': target2,
-        'Target 3': target3,
-        'Stop Loss': stop_loss
+        'Target 1': round(price * 1.02, 2),
+        'Target 2': round(price * 1.04, 2),
+        'Target 3': round(price * 1.06, 2),
+        'Stop Loss': round(price * 0.97, 2)
     }
 
-data = []
+results = []
 
 for symbol in stock_list:
     df = fetch_data(symbol)
     if df is not None:
         try:
-            result = analyze_stock(df, symbol)
-            data.append(result)
-        except Exception as e:
-            st.warning(f"⚠️ Error processing {symbol}: {e}")
+            result = analyze(df, symbol)
+            results.append(result)
+        except:
+            pass
 
-if data:
-    st.dataframe(pd.DataFrame(data).sort_values(by='Sentiment', ascending=False), use_container_width=True)
+if results:
+    st.dataframe(pd.DataFrame(results), use_container_width=True)
 else:
-    st.error("🚫 No data to display. Please check your internet connection or symbols.")
+    st.warning("🚫 No data to display. Check your internet connection or stock symbols.")
