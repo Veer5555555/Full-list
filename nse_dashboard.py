@@ -11,41 +11,38 @@ from ta.volume import VolumeWeightedAveragePrice
 RSI_OVERBOUGHT = 70
 RSI_OVERSOLD = 30
 ADX_STRONG_TREND = 25
+max_rsi = 100  # Add a sensible default to avoid undefined variable
 
 def gann_levels(price):
     """Calculate Gann support/resistance levels with more precise multipliers"""
     multipliers = [1.125, 1.25, 1.333, 1.5, 1.618, 1.75, 2.0, 2.25, 2.5, 3.0]
     levels_up = [round(price * m, 2) for m in multipliers]
     levels_down = [round(price / m, 2) for m in multipliers]
-    return sorted(list(set(levels_up + levels_down)))  # Remove duplicates
+    return sorted(list(set(levels_up + levels_down)))
 
 def is_breakout(hist):
     """Enhanced breakout detection with volume confirmation"""
     if len(hist) < 21:
         return False
-    recent_high = hist['High'][-21:-1].max()  # Use High instead of Close
+    recent_high = hist['High'][-21:-1].max()
     volume_avg = hist['Volume'][-21:-1].mean()
-    return (hist['Close'].iloc[-1] > recent_high * 1.01 and  # 1% above resistance
-            hist['Volume'].iloc[-1] > volume_avg * 1.5)     # 50% higher volume
+    return (hist['Close'].iloc[-1] > recent_high * 1.01 and
+            hist['Volume'].iloc[-1] > volume_avg * 1.5)
 
 def get_trend_signal(close, rsi, macd_diff, adx):
     """Determine bullish/bearish trend with multiple confirmation"""
-    # Bullish conditions
     bullish = (
-        (close > close.rolling(20).mean().iloc[-1]) and  # Price above SMA20
-        (macd_diff > 0) and                             # MACD above signal
-        (rsi > 50) and                                   # RSI neutral/bullish
-        (adx > ADX_STRONG_TREND)                         # Strong trend
+        (close.iloc[-1] > close.rolling(20).mean().iloc[-1]) and
+        (macd_diff > 0) and
+        (rsi > 50) and
+        (adx > ADX_STRONG_TREND)
     )
-    
-    # Bearish conditions
     bearish = (
-        (close < close.rolling(20).mean().iloc[-1]) and  # Price below SMA20
-        (macd_diff < 0) and                              # MACD below signal
-        (rsi < 50) and                                   # RSI neutral/bearish
-        (adx > ADX_STRONG_TREND)                         # Strong trend
+        (close.iloc[-1] < close.rolling(20).mean().iloc[-1]) and
+        (macd_diff < 0) and
+        (rsi < 50) and
+        (adx > ADX_STRONG_TREND)
     )
-    
     if bullish and rsi < RSI_OVERBOUGHT:
         return "🟢 Strong Bullish"
     elif bearish and rsi > RSI_OVERSOLD:
@@ -57,15 +54,14 @@ def get_trend_signal(close, rsi, macd_diff, adx):
     else:
         return "⚪ Neutral"
 
-# Streamlit app configuration
+# Streamlit app config
 st.set_page_config(layout="wide")
 st.title("📈 Advanced NSE Stock Dashboard with Technical Signals")
 
-# Load NSE symbols (consider caching this)
 nse_symbols = [
-    'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS', 'ADANIPORTS.NS', 
-    'TATAMOTORS.NS', 'TATASTEEL.NS', 'HAL.NS', 'IRCTC.NS', 'IOC.NS', 'COALINDIA.NS', 
-    'HINDUNILVR.NS', 'PNB.NS', 'RELIANCE.NS', 'ITC.NS', 'VEDL.NS', 'JSWSTEEL.NS', 
+    'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS', 'ADANIPORTS.NS',
+    'TATAMOTORS.NS', 'TATASTEEL.NS', 'HAL.NS', 'IRCTC.NS', 'IOC.NS', 'COALINDIA.NS',
+    'HINDUNILVR.NS', 'PNB.NS', 'RELIANCE.NS', 'ITC.NS', 'VEDL.NS', 'JSWSTEEL.NS',
     'NTPC.NS', 'POWERGRID.NS', 'BPCL.NS', 'ONGC.NS', 'NHPC.NS', 'ADANIGREEN.NS',
     'GAIL.NS', 'TECHM.NS', 'HCLTECH.NS', 'CIPLA.NS', 'DIVISLAB.NS', 'SUNPHARMA.NS',
     'BAJAJFINSV.NS', 'BAJFINANCE.NS', 'MARUTI.NS', 'EICHERMOT.NS', 'M&M.NS',
@@ -81,8 +77,8 @@ nse_symbols = [
     'HAVELLS.NS', 'BLUEDART.NS', 'DRREDDY.NS', 'AUROPHARMA.NS', 'GLAND.NS',
     'LUPIN.NS', 'BIOCON.NS', 'BOSCHLTD.NS', 'ESCORTS.NS', 'ASHOKLEY.NS',
     'TIINDIA.NS', 'SRF.NS', 'DEEPAKNTR.NS', 'PIIND.NS', 'ASTRAL.NS', 'TATVA.NS',
-    'ADANIENT.NS', 'VBL.NS', 'SIEMENS.NS', 'VBL.NS', 'KPRMILL.NS',
-    'AIAENG.NS', 'POLYCAB.NS', 'INDUSTOWER.NS','KALYANKJIL.NS'
+    'ADANIENT.NS', 'VBL.NS', 'SIEMENS.NS', 'KPRMILL.NS',
+    'AIAENG.NS', 'POLYCAB.NS', 'INDUSTOWER.NS', 'KALYANKJIL.NS'
 ]
 
 progress = st.progress(0)
@@ -91,8 +87,8 @@ dashboard_data = []
 for idx, symbol in enumerate(nse_symbols):
     try:
         ticker = yf.Ticker(symbol)
-        hist = ticker.history(period='40d', interval='1d')  # Extended period for better indicators
-        
+        hist = ticker.history(period='40d', interval='1d')
+
         if hist.empty or len(hist) < 30:
             continue
 
@@ -101,32 +97,24 @@ for idx, symbol in enumerate(nse_symbols):
         low = hist['Low']
         volume = hist['Volume']
         price = close.iloc[-1]
-        
-     
-        # Technical indicators
-        rsi = RSIIndicator(close=close).rsi().iloc[-1]
-        
-# No RSI filtering now
-pass
 
-            
+        rsi = RSIIndicator(close=close).rsi().iloc[-1]
+        if rsi > max_rsi:
+            continue
+
         macd_obj = MACD(close=close)
         macd_diff = macd_obj.macd_diff().iloc[-1]
         macd_line = macd_obj.macd().iloc[-1]
         signal_line = macd_obj.macd_signal().iloc[-1]
-        
-        # Additional indicators
+
         adx = ADXIndicator(high=high, low=low, close=close).adx().iloc[-1]
         vwap = VolumeWeightedAveragePrice(high=high, low=low, close=close, volume=volume).vwap().iloc[-1]
-        
-        # Bollinger Bands
         bb = BollingerBands(close=close)
         bb_upper = bb.bollinger_hband().iloc[-1]
         bb_lower = bb.bollinger_lband().iloc[-1]
-        
         sma_20 = SMAIndicator(close=close, window=20).sma_indicator().iloc[-1]
         ema_20 = EMAIndicator(close=close, window=20).ema_indicator().iloc[-1]
-        
+
         breakout = is_breakout(hist)
         trend_signal = get_trend_signal(close, rsi, macd_diff, adx)
         gann = gann_levels(price)
@@ -141,7 +129,7 @@ pass
             "MACD Diff": round(macd_diff, 2),
             "ADX": round(adx, 2),
             "VWAP": round(vwap, 2),
-            "BB Width": round((bb_upper - bb_lower)/price*100, 2),  # % width
+            "BB Width": round((bb_upper - bb_lower)/price*100, 2),
             "SMA 20": round(sma_20, 2),
             "EMA 20": round(ema_20, 2),
             "Breakout": "✅" if breakout else "❌",
@@ -153,35 +141,28 @@ pass
     finally:
         progress.progress((idx + 1) / len(nse_symbols))
 
-# Create DataFrame and display
 if dashboard_data:
     df = pd.DataFrame(dashboard_data)
-    
-    # Apply conditional formatting
+
     def color_trend(val):
         if "Bullish" in val:
             return 'background-color: lightgreen'
         elif "Bearish" in val:
             return 'background-color: lightcoral'
         return ''
-    
-# Sort by trend and breakout strength
-df['sort_score'] = df.apply(lambda x: 
-    (10 if "Bullish" in x['Trend'] else -10 if "Bearish" in x['Trend'] else 0) +
-    (20 if x['Breakout'] == "✅" else 0) +
-    (5 if x['ADX'] > ADX_STRONG_TREND else 0), axis=1)
 
-df_sorted = df.sort_values(by="sort_score", ascending=False).drop(columns=['sort_score'])
+    styled_df = df.style.applymap(color_trend, subset=['Trend'])
 
-# Apply style AFTER sorting
-styled_df = df_sorted.style.applymap(color_trend, subset=['Trend'])
+    df['sort_score'] = df.apply(lambda x:
+        (10 if "Bullish" in x['Trend'] else -10 if "Bearish" in x['Trend'] else 0) +
+        (20 if x['Breakout'] == "✅" else 0) +
+        (5 if x['ADX'] > ADX_STRONG_TREND else 0), axis=1)
 
-# Display final dashboard
-st.dataframe(
-    styled_df,
-    use_container_width=True,
-    height=800
-)
-
+    st.dataframe(
+        styled_df.sort_values(by="sort_score", ascending=False)
+            .drop(columns=['sort_score']),
+        use_container_width=True,
+        height=800
+    )
 else:
     st.warning("No stocks match your filters. Try adjusting your criteria.")
