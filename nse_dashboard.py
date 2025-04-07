@@ -2,46 +2,46 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 
-# Sample stocks
+# Sample symbols for testing — you can replace with full list
 symbols = ['INFY.NS', 'TCS.NS', 'WIPRO.NS']
 
 results = []
 
 for symbol in symbols:
     try:
-        df = yf.download(symbol, period="3mo", interval="1d")
-        
+        df = yf.download(symbol, period="3mo", interval="1d", progress=False)
+
         if df.empty:
             raise ValueError("No data returned")
-        
-        # Drop NaNs
-        df = df.dropna()
 
-        # Compute EMA
+        df.dropna(inplace=True)
+
+        # Calculate EMA
         df["EMA20"] = df["Close"].ewm(span=20, adjust=False).mean()
         df["EMA50"] = df["Close"].ewm(span=50, adjust=False).mean()
         df["EMA100"] = df["Close"].ewm(span=100, adjust=False).mean()
 
-        # Compute RSI
+        # Calculate RSI
         delta = df["Close"].diff()
         gain = np.where(delta > 0, delta, 0)
         loss = np.where(delta < 0, -delta, 0)
         avg_gain = pd.Series(gain).rolling(window=14).mean()
         avg_loss = pd.Series(loss).rolling(window=14).mean()
         rs = avg_gain / avg_loss
-        df["RSI"] = 100 - (100 / (1 + rs))
+        rsi = 100 - (100 / (1 + rs))
+        df["RSI"] = rsi
 
-        # Compute MACD
+        # Calculate MACD
         df["EMA12"] = df["Close"].ewm(span=12, adjust=False).mean()
         df["EMA26"] = df["Close"].ewm(span=26, adjust=False).mean()
         df["MACD"] = df["EMA12"] - df["EMA26"]
         df["Signal"] = df["MACD"].ewm(span=9, adjust=False).mean()
         df["MACD_diff"] = df["MACD"] - df["Signal"]
 
-        # Gann levels (simple version)
+        # Gann Levels (simplified)
         close_price = df["Close"].iloc[-1]
         gann_ratios = [0.25, 0.5, 0.75, 1.0, 1.25]
-        gann_levels = [round(close_price * r, 2) for r in gann_ratios]
+        gann_levels = ", ".join([str(round(close_price * r, 2)) for r in gann_ratios])
 
         results.append({
             "Symbol": symbol,
@@ -59,6 +59,5 @@ for symbol in symbols:
     except Exception as e:
         results.append({"Symbol": symbol, "Error": str(e)})
 
-# Final DataFrame
-df_results = pd.DataFrame(results)
-print(df_results)
+# Create final DataFrame
+df_results = pd_
