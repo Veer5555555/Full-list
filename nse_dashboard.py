@@ -1,10 +1,11 @@
+import yfinance as yf
 import streamlit as st
 import pandas as pd
-import yfinance as yf
-from datetime import datetime, timedelta
+import numpy as np
 
-# Stock list (replace with full list you shared)
-stock_list = [ 'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS', 
+# Stock list
+symbols = [ 
+    'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS', 
     'ADANIPORTS.NS', 'TATAMOTORS.NS', 'TATASTEEL.NS', 'HAL.NS', 'IRCTC.NS',
     'IOC.NS', 'COALINDIA.NS', 'HINDUNILVR.NS', 'PNB.NS', 'RELIANCE.NS',
     'ITC.NS', 'VEDL.NS', 'JSWSTEEL.NS', 'NTPC.NS', 'POWERGRID.NS',
@@ -27,11 +28,13 @@ stock_list = [ 'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS',
     'KPRMILL.NS', 'AIAENG.NS', 'POLYCAB.NS', 'INDUSTOWER.NS', 'KALYANKJIL.NS'
 ]
 
+# Constants
 RSI_PERIOD = 14
 RSI_OVERBOUGHT = 70
 RSI_OVERSOLD = 30
 
-def calculate_indicators(df):
+# Indicator functions
+def compute_indicators(df):
     df['EMA_12'] = df['Close'].ewm(span=12, adjust=False).mean()
     df['EMA_26'] = df['Close'].ewm(span=26, adjust=False).mean()
     df['MACD'] = df['EMA_12'] - df['EMA_26']
@@ -39,23 +42,30 @@ def calculate_indicators(df):
     df['MACD_Diff'] = df['MACD'] - df['Signal']
     
     delta = df['Close'].diff()
-    gain = delta.where(delta > 0, 0.0)
-    loss = -delta.where(delta < 0, 0.0)
-    avg_gain = gain.rolling(RSI_PERIOD).mean()
-    avg_loss = loss.rolling(RSI_PERIOD).mean()
+    gain = np.where(delta > 0, delta, 0)
+    loss = np.where(delta < 0, -delta, 0)
+    avg_gain = pd.Series(gain).rolling(window=RSI_PERIOD).mean()
+    avg_loss = pd.Series(loss).rolling(window=RSI_PERIOD).mean()
     rs = avg_gain / avg_loss
     df['RSI'] = 100 - (100 / (1 + rs))
     
-    df['GANN'] = df['Close'].rolling(window=30).mean()
+    df['GANN_LEVEL'] = ((df['High'] + df['Low']) / 2).round(2)
+
     return df
 
+# Trend analysis
 def get_trend(row):
-    bullish = (row['Close'] > row['GANN']) and (row['MACD'] > row['Signal']) and (row['MACD_Diff'] > 0)
-    bearish = (row['Close'] < row['GANN']) and (row['MACD'] < row['Signal']) and (row['MACD_Diff'] < 0)
-    
-    if bullish and row['RSI'] < RSI_OVERBOUGHT:
+    macd = row['MACD']
+    signal = row['Signal']
+    macd_diff = row['MACD_Diff']
+    rsi = row['RSI']
+
+    bullish = macd > signal and macd_diff > 0
+    bearish = macd < signal and macd_diff < 0
+
+    if bullish and rsi < RSI_OVERBOUGHT:
         return "🟢 Strong Bullish"
-    elif bearish and row['RSI'] > RSI_OVERSOLD:
+    elif bearish and rsi > RSI_OVERSOLD:
         return "🔴 Strong Bearish"
     elif bullish:
         return "🟡 Mild Bullish"
@@ -64,24 +74,34 @@ def get_trend(row):
     else:
         return "⚪ Neutral"
 
-st.title("📈 Indian Stock Market Trend Dashboard")
+# Streamlit UI
+st.title("📊 Indian Stock Trend Dashboard")
 
-for symbol in stock_list:
+# Data table
+results = []
+for symbol in symbols:
     try:
-        df = yf.download(symbol, period="3mo", interval="1d", progress=False)
-        if df.empty or len(df) < 35:
-            st.write(f"{symbol}: Not enough data")
+        df = yf.download(symbol, period="60d", interval="1d", progress=False)
+        if df.empty or len(df) < 30:
             continue
-        
-        df = calculate_indicators(df)
+
+        df = compute_indicators(df)
         latest = df.iloc[-1]
-        
-        st.subheader(f"{symbol}")
-        st.write(f"🔹 Close: {latest['Close']:.2f}")
-        st.write(f"🔸 MACD: {latest['MACD']:.2f}, Signal: {latest['Signal']:.2f}, MACD Diff: {latest['MACD_Diff']:.2f}")
-        st.write(f"📊 RSI: {latest['RSI']:.2f}")
-        st.write(f"🌀 GANN Level: {latest['GANN']:.2f}")
-        st.write(f"📌 Trend: **{get_trend(latest)}**")
-        
+
+        trend = get_trend(latest)
+        results.append({
+            "Symbol": symbol,
+            "Close": round(latest['Close'], 2),
+            "MACD": round(latest['MACD'], 2),
+            "Signal": round(latest['Signal'], 2),
+            "MACD_Diff": round(latest['MACD_Diff'], 2),
+            "RSI": round(latest['RSI'], 2),
+            "GANN": round(latest['GANN_LEVEL'], 2),
+            "Trend": trend
+        })
+
     except Exception as e:
-        st.write(f"{symbol}: ⚠️ Error - {str(e)}")
+        st.warning(f"⚠️ Error with {symbol}: {e}")
+
+df_result = pd.DataFrame(results)
+st.dataframe(df_result, use_container_width=True)
