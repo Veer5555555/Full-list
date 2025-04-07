@@ -1,70 +1,16 @@
 import yfinance as yf
 import pandas as pd
-import numpy as np
 import streamlit as st
-from ta.momentum import RSIIndicator
-from ta.trend import MACD, SMAIndicator, EMAIndicator, ADXIndicator
-from ta.volatility import BollingerBands
-from ta.volume import VolumeWeightedAveragePrice
 
 # Constants
+RSI_PERIOD = 14
 RSI_OVERBOUGHT = 70
 RSI_OVERSOLD = 30
-ADX_STRONG_TREND = 25
-max_rsi = 80  # Set upper limit for filtering overbought stocks
+GANN_LEVEL_PERCENT = 0.125  # 12.5% above/below close
 
-def gann_levels(price):
-    multipliers = [1.125, 1.25, 1.333, 1.5, 1.618, 1.75, 2.0, 2.25, 2.5, 3.0]
-    levels_up = [round(price * m, 2) for m in multipliers]
-    levels_down = [round(price / m, 2) for m in multipliers]
-    return sorted(list(set(levels_up + levels_down)))
-
-def is_breakout(hist):
-    if len(hist) < 21:
-        return False
-    recent_high = hist['High'][-21:-1].max()
-    volume_avg = hist['Volume'][-21:-1].mean()
-    return (hist['Close'].iloc[-1] > recent_high * 1.01 and 
-            hist['Volume'].iloc[-1] > volume_avg * 1.5)
-
-def get_trend_signal(close, rsi, macd_diff, adx):
-    sma_20 = close.rolling(20).mean()
-    if len(sma_20) < 20:
-        return "⚪ Neutral"
-
-    last_close = close.iloc[-1]
-    last_sma20 = sma_20.iloc[-1]
-
-    bullish = (
-        (last_close > last_sma20) and
-        (macd_diff > 0) and
-        (rsi > 50) and
-        (adx > ADX_STRONG_TREND)
-    )
-
-    bearish = (
-        (last_close < last_sma20) and
-        (macd_diff < 0) and
-        (rsi < 50) and
-        (adx > ADX_STRONG_TREND)
-    )
-
-    if bullish and rsi < RSI_OVERBOUGHT:
-        return "🟢 Strong Bullish"
-    elif bearish and rsi > RSI_OVERSOLD:
-        return "🔴 Strong Bearish"
-    elif bullish:
-        return "🟡 Mild Bullish"
-    elif bearish:
-        return "🟠 Mild Bearish"
-    else:
-        return "⚪ Neutral"
-
-st.set_page_config(layout="wide")
-st.title("📈 Advanced NSE Stock Dashboard with Technical Signals")
-
-# NSE symbols list
-nse_symbols = [ 'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS', 
+# List of NSE symbols
+symbols = [ 
+    'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS',
     'ADANIPORTS.NS', 'TATAMOTORS.NS', 'TATASTEEL.NS', 'HAL.NS', 'IRCTC.NS',
     'IOC.NS', 'COALINDIA.NS', 'HINDUNILVR.NS', 'PNB.NS', 'RELIANCE.NS',
     'ITC.NS', 'VEDL.NS', 'JSWSTEEL.NS', 'NTPC.NS', 'POWERGRID.NS',
@@ -87,89 +33,84 @@ nse_symbols = [ 'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS',
     'KPRMILL.NS', 'AIAENG.NS', 'POLYCAB.NS', 'INDUSTOWER.NS', 'KALYANKJIL.NS'
 ]
 
-progress = st.progress(0)
-dashboard_data = []
+# Functions
+def calculate_rsi(data, period=RSI_PERIOD):
+    delta = data['Close'].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
 
-for idx, symbol in enumerate(nse_symbols):
+def calculate_macd(data):
+    exp1 = data['Close'].ewm(span=12, adjust=False).mean()
+    exp2 = data['Close'].ewm(span=26, adjust=False).mean()
+    macd = exp1 - exp2
+    signal = macd.ewm(span=9, adjust=False).mean()
+    macd_diff = macd - signal
+    return macd, signal, macd_diff
+
+def classify_trend(rsi, macd, signal, close, gann_up, gann_down):
+    bullish = macd > signal and close > gann_up
+    bearish = macd < signal and close < gann_down
+    if bullish and rsi < RSI_OVERBOUGHT:
+        return "🟢 Strong Bullish"
+    elif bearish and rsi > RSI_OVERSOLD:
+        return "🔴 Strong Bearish"
+    elif bullish:
+        return "🟡 Mild Bullish"
+    elif bearish:
+        return "🟠 Mild Bearish"
+    else:
+        return "⚪ Neutral"
+
+# Streamlit app
+st.set_page_config(layout="wide")
+st.title("📈 Stock Breakout Dashboard with RSI, MACD, Gann & Prediction")
+
+results = []
+for symbol in symbols:
     try:
-        ticker = yf.Ticker(symbol)
-        hist = ticker.history(period='40d', interval='1d')
-
-        if hist.empty or len(hist) < 30:
+        data = yf.download(symbol, period="3mo", interval="1d", progress=False)
+        if data.empty or len(data) < 35:
             continue
+        data['RSI'] = calculate_rsi(data)
+        data['MACD'], data['Signal'], data['MACD_Diff'] = calculate_macd(data)
 
-        close = hist['Close']
-        high = hist['High']
-        low = hist['Low']
-        volume = hist['Volume']
-        price = close.iloc[-1]
+        latest = data.iloc[-1]
+        close = latest['Close']
+        rsi = latest['RSI']
+        macd = latest['MACD']
+        signal_line = latest['Signal']
+        macd_diff = latest['MACD_Diff']
+        gann_up = close * (1 + GANN_LEVEL_PERCENT)
+        gann_down = close * (1 - GANN_LEVEL_PERCENT)
 
-        rsi = RSIIndicator(close=close).rsi().iloc[-1]
-        if rsi > max_rsi:
-            continue
+        prediction = classify_trend(rsi, macd, signal_line, close, gann_up, gann_down)
 
-        macd_obj = MACD(close=close)
-        macd_diff = macd_obj.macd_diff().iloc[-1]
-        macd_line = macd_obj.macd().iloc[-1]
-        signal_line = macd_obj.macd_signal().iloc[-1]
-
-        adx = ADXIndicator(high=high, low=low, close=close).adx().iloc[-1]
-        vwap = VolumeWeightedAveragePrice(high=high, low=low, close=close, volume=volume).vwap().iloc[-1]
-
-        bb = BollingerBands(close=close)
-        bb_upper = bb.bollinger_hband().iloc[-1]
-        bb_lower = bb.bollinger_lband().iloc[-1]
-
-        sma_20 = SMAIndicator(close=close, window=20).sma_indicator().iloc[-1]
-        ema_20 = EMAIndicator(close=close, window=20).ema_indicator().iloc[-1]
-
-        breakout = is_breakout(hist)
-        trend_signal = get_trend_signal(close, rsi, macd_diff, adx)
-        gann = gann_levels(price)
-
-        dashboard_data.append({
-            "Symbol": symbol.replace(".NS", ""),
-            "Price": round(price, 2),
-            "Trend": trend_signal,
+        results.append({
+            "Symbol": symbol,
+            "Close": round(close, 2),
             "RSI": round(rsi, 2),
-            "MACD": round(macd_line, 2),
+            "MACD": round(macd, 2),
             "Signal": round(signal_line, 2),
             "MACD Diff": round(macd_diff, 2),
-            "ADX": round(adx, 2),
-            "VWAP": round(vwap, 2),
-            "BB Width": round((bb_upper - bb_lower)/price*100, 2),
-            "SMA 20": round(sma_20, 2),
-            "EMA 20": round(ema_20, 2),
-            "Breakout": "✅" if breakout else "❌",
-            "Gann Near": ", ".join(map(str, sorted(gann, key=lambda x: abs(x - price))[:4]))
+            "Gann Up": round(gann_up, 2),
+            "Gann Down": round(gann_down, 2),
+            "Prediction": prediction
         })
 
     except Exception as e:
         st.warning(f"⚠️ Error with {symbol}: {e}")
-    progress.progress((idx + 1) / len(nse_symbols))
 
-if dashboard_data:
-    df = pd.DataFrame(dashboard_data)
-
-    def color_trend(val):
-        if "Bullish" in val:
-            return 'background-color: lightgreen'
-        elif "Bearish" in val:
-            return 'background-color: lightcoral'
-        return ''
-
-    styled_df = df.style.applymap(color_trend, subset=['Trend'])
-
-    df['sort_score'] = df.apply(lambda x: 
-        (10 if "Bullish" in x['Trend'] else -10 if "Bearish" in x['Trend'] else 0) +
-        (20 if x['Breakout'] == "✅" else 0) +
-        (5 if x['ADX'] > ADX_STRONG_TREND else 0), axis=1)
-
-    st.dataframe(
-        styled_df.sort_values(by="sort_score", ascending=False)
-                .drop(columns=['sort_score']),
-        use_container_width=True,
-        height=800
-    )
+# Display result
+if results:
+    df = pd.DataFrame(results)
+    st.dataframe(df.style.applymap(
+        lambda v: 'color: green' if isinstance(v, str) and 'Bullish' in v else 
+                  ('color: red' if 'Bearish' in v else None), subset=['Prediction']
+    ))
 else:
-    st.warning("No stocks match your filters. Try adjusting your criteria.")
+    st.error("No data to display. Please check symbols or connectivity.")
+
