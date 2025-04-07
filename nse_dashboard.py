@@ -1,16 +1,15 @@
 import yfinance as yf
 import pandas as pd
 import streamlit as st
+import datetime
 
 # Constants
 RSI_PERIOD = 14
 RSI_OVERBOUGHT = 70
 RSI_OVERSOLD = 30
-GANN_LEVEL_PERCENT = 0.125  # 12.5% above/below close
 
-# List of NSE symbols
-symbols = [ 
-    'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS',
+# Full stock list
+stocks = [ 'INFY.NS', 'WIPRO.NS', 'TCS.NS', 'SBIN.NS', 'LICI.NS',
     'ADANIPORTS.NS', 'TATAMOTORS.NS', 'TATASTEEL.NS', 'HAL.NS', 'IRCTC.NS',
     'IOC.NS', 'COALINDIA.NS', 'HINDUNILVR.NS', 'PNB.NS', 'RELIANCE.NS',
     'ITC.NS', 'VEDL.NS', 'JSWSTEEL.NS', 'NTPC.NS', 'POWERGRID.NS',
@@ -30,28 +29,28 @@ symbols = [
     'AUROPHARMA.NS', 'GLAND.NS', 'LUPIN.NS', 'BIOCON.NS', 'BOSCHLTD.NS',
     'ESCORTS.NS', 'ASHOKLEY.NS', 'TIINDIA.NS', 'SRF.NS', 'DEEPAKNTR.NS',
     'PIIND.NS', 'ASTRAL.NS', 'TATVA.NS', 'ADANIENT.NS', 'VBL.NS', 'SIEMENS.NS',
-    'KPRMILL.NS', 'AIAENG.NS', 'POLYCAB.NS', 'INDUSTOWER.NS', 'KALYANKJIL.NS'
-]
+    'KPRMILL.NS', 'AIAENG.NS', 'POLYCAB.NS', 'INDUSTOWER.NS', 'KALYANKJIL.NS' ]
 
-# Functions
+# Function to calculate RSI
 def calculate_rsi(data, period=RSI_PERIOD):
     delta = data['Close'].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
     avg_gain = gain.rolling(window=period).mean()
     avg_loss = loss.rolling(window=period).mean()
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
-def calculate_macd(data):
-    exp1 = data['Close'].ewm(span=12, adjust=False).mean()
-    exp2 = data['Close'].ewm(span=26, adjust=False).mean()
-    macd = exp1 - exp2
-    signal = macd.ewm(span=9, adjust=False).mean()
-    macd_diff = macd - signal
-    return macd, signal, macd_diff
+# Gann level calculation
+def calculate_gann_levels(price):
+    sqrt_price = price ** 0.5
+    return {
+        'Gann_Up': (round(sqrt_price + 1) ** 2),
+        'Gann_Down': (round(sqrt_price - 1) ** 2)
+    }
 
-def classify_trend(rsi, macd, signal, close, gann_up, gann_down):
+# Trend classification
+def classify_trend(macd, signal, rsi, close, gann_up, gann_down):
     bullish = macd > signal and close > gann_up
     bearish = macd < signal and close < gann_down
     if bullish and rsi < RSI_OVERBOUGHT:
@@ -65,52 +64,58 @@ def classify_trend(rsi, macd, signal, close, gann_up, gann_down):
     else:
         return "⚪ Neutral"
 
-# Streamlit app
-st.set_page_config(layout="wide")
-st.title("📈 Stock Breakout Dashboard with RSI, MACD, Gann & Prediction")
+# Streamlit UI
+st.title("📈 Stock Breakout Dashboard with GANN, RSI, MACD")
+selected_stocks = st.multiselect("Select stocks to analyze:", stocks, default=stocks[:30])  # Load 30 by default
+end_date = datetime.datetime.today()
+start_date = end_date - datetime.timedelta(days=100)
 
+# Main processing
 results = []
-for symbol in symbols:
+for symbol in selected_stocks:
     try:
-        data = yf.download(symbol, period="3mo", interval="1d", progress=False)
-        if data.empty or len(data) < 35:
+        df = yf.download(symbol, start=start_date, end=end_date, progress=False)
+        if df.empty:
             continue
-        data['RSI'] = calculate_rsi(data)
-        data['MACD'], data['Signal'], data['MACD_Diff'] = calculate_macd(data)
 
-        latest = data.iloc[-1]
-        close = latest['Close']
-        rsi = latest['RSI']
-        macd = latest['MACD']
-        signal_line = latest['Signal']
-        macd_diff = latest['MACD_Diff']
-        gann_up = close * (1 + GANN_LEVEL_PERCENT)
-        gann_down = close * (1 - GANN_LEVEL_PERCENT)
+        df['RSI'] = calculate_rsi(df)
+        df['EMA_12'] = df['Close'].ewm(span=12).mean()
+        df['EMA_26'] = df['Close'].ewm(span=26).mean()
+        df['MACD'] = df['EMA_12'] - df['EMA_26']
+        df['Signal'] = df['MACD'].ewm(span=9).mean()
+        df['MACD_Diff'] = df['MACD'] - df['Signal']
 
-        prediction = classify_trend(rsi, macd, signal_line, close, gann_up, gann_down)
+        latest = df.iloc[-1]
+        close = float(latest['Close'])
+        rsi = float(latest['RSI'])
+        macd = float(latest['MACD'])
+        signal_line = float(latest['Signal'])
+        macd_diff = float(latest['MACD_Diff'])
+
+        gann = calculate_gann_levels(close)
+        gann_up = gann['Gann_Up']
+        gann_down = gann['Gann_Down']
+
+        trend = classify_trend(macd, signal_line, rsi, close, gann_up, gann_down)
 
         results.append({
-            "Symbol": symbol,
-            "Close": round(close, 2),
-            "RSI": round(rsi, 2),
-            "MACD": round(macd, 2),
-            "Signal": round(signal_line, 2),
-            "MACD Diff": round(macd_diff, 2),
-            "Gann Up": round(gann_up, 2),
-            "Gann Down": round(gann_down, 2),
-            "Prediction": prediction
+            'Symbol': symbol,
+            'Close': close,
+            'RSI': round(rsi, 2),
+            'MACD': round(macd, 2),
+            'Signal': round(signal_line, 2),
+            'MACD_Diff': round(macd_diff, 2),
+            'Gann Up': gann_up,
+            'Gann Down': gann_down,
+            'Trend': trend
         })
 
     except Exception as e:
         st.warning(f"⚠️ Error with {symbol}: {e}")
 
-# Display result
+# Output
 if results:
-    df = pd.DataFrame(results)
-    st.dataframe(df.style.applymap(
-        lambda v: 'color: green' if isinstance(v, str) and 'Bullish' in v else 
-                  ('color: red' if 'Bearish' in v else None), subset=['Prediction']
-    ))
+    df_results = pd.DataFrame(results)
+    st.dataframe(df_results.sort_values(by="Trend", ascending=False), use_container_width=True)
 else:
-    st.error("No data to display. Please check symbols or connectivity.")
-
+    st.info("No valid stock data fetched.")
